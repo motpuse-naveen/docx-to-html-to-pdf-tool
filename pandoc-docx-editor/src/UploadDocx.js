@@ -36,7 +36,7 @@ const UploadDocx = () => {
         <div style={{ padding: "10px", maxWidth: "816px", margin: "auto" }}>
             <h2>Upload DOCX and Convert to HTML</h2>
 
-            <label style={{ display: "block", marginBottom: "10px" }}>
+            <label style={{ marginBottom: "10px" }}>
                 <strong>Select DOCX File:</strong>
             </label>
             <input type="file" accept=".docx" ref={fileInputRef} onChange={handleFileChange} />
