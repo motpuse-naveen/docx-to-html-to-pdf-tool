@@ -1,0 +1,20 @@
+Start Backend (Python3)
+-----------------------
+cd pandoc-docx-editor/backend
+source venv/bin/activate
+run --> python3 -m uvicorn main:app --reload
+
+
+Start Node Server
+------------------
+cd pandoc-docx-editor/server
+node server.js
+
+Start Frontend
+--------------
+cd pandoc-docx-editor
+npm start
+
+Tools That have been in use:
+1] pandoc - converts docx to html.
+2] 
