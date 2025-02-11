@@ -48,7 +48,10 @@ async def upload_file(file: UploadFile = File(...)):
             html_content = f.read()
 
         # Fix image paths to match FastAPI static serving
-        updated_html = html_content.replace('src="media/', f'src="/uploads/output_images/{os.path.basename(unique_folder)}/')
+        #updated_html = html_content.replace('src="media/', f'src="/uploads/output_images/{os.path.basename(unique_folder)}/')
+        NODE_SERVER_URL = "http://localhost:5000"  # Node.js is serving static files
+        updated_html = html_content.replace('src="media/', f'src="{NODE_SERVER_URL}/uploads/output_images/{os.path.basename(unique_folder)}/')
+
 
         return {"html": updated_html, "folder": unique_folder}
 

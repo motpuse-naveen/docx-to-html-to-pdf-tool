@@ -19,8 +19,13 @@ const UploadDocx = () => {
             const response = await axios.post("http://localhost:5000/upload", formData, {
                 headers: { "Content-Type": "multipart/form-data" },
             });
-
-            setHtmlContent(response.data.html);
+            debugger;
+            const fixedHtml = response.data.html.replace(
+                /src="uploads\/output_images\//g,
+                'src="http://localhost:5000/uploads/output_images/'
+            );
+            setHtmlContent(fixedHtml);
+            //setHtmlContent(response.data.html);
         } catch (error) {
             console.error("Error uploading file:", error);
             setError("Failed to upload file. Please try again.");
@@ -28,9 +33,10 @@ const UploadDocx = () => {
     };
 
     return (
-        <div style={{ padding: "20px", maxWidth: "816px", margin: "auto" }}>
+        <div style={{ padding: "10px", maxWidth: "816px", margin: "auto" }}>
             <h2>Upload DOCX and Convert to HTML</h2>
-            <label style={{ marginBottom: "10px" }}>
+
+            <label style={{ display: "block", marginBottom: "10px" }}>
                 <strong>Select DOCX File:</strong>
             </label>
             <input type="file" accept=".docx" ref={fileInputRef} onChange={handleFileChange} />
@@ -54,6 +60,8 @@ const UploadDocx = () => {
                             menubar: true,
                             plugins: "lists link image code",
                             toolbar: "undo redo | formatselect | bold italic | alignleft aligncenter alignright | code",
+                            images_upload_url: "http://localhost:5000/upload-image",
+                            automatic_uploads: true,
                         }}
                     />
                 </>

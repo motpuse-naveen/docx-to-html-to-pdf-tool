@@ -17,4 +17,4 @@ npm start
 
 Tools That have been in use:
 1] pandoc - converts docx to html.
-2] 
+2] inkscape - convert wmf, emf images to png
