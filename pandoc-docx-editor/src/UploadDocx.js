@@ -5,6 +5,7 @@ import { Editor } from "@tinymce/tinymce-react";
 const UploadDocx = () => {
     const [htmlContent, setHtmlContent] = useState("");
     const [error, setError] = useState("");
+    const [loading, setLoading] = useState(false); // NEW: Loading state
     const fileInputRef = useRef(null);
 
     const handleFileChange = async (event) => {
@@ -12,6 +13,8 @@ const UploadDocx = () => {
         if (!file) return;
 
         setError(""); // Clear previous errors
+        setLoading(true); // Start loading
+
         const formData = new FormData();
         formData.append("file", file);
 
@@ -19,16 +22,18 @@ const UploadDocx = () => {
             const response = await axios.post("http://localhost:5000/upload", formData, {
                 headers: { "Content-Type": "multipart/form-data" },
             });
-            debugger;
+
             const fixedHtml = response.data.html.replace(
                 /src="uploads\/output_images\//g,
                 'src="http://localhost:5000/uploads/output_images/'
             );
+
             setHtmlContent(fixedHtml);
-            //setHtmlContent(response.data.html);
         } catch (error) {
             console.error("Error uploading file:", error);
             setError("Failed to upload file. Please try again.");
+        } finally {
+            setLoading(false); // Stop loading
         }
     };
 
@@ -41,9 +46,11 @@ const UploadDocx = () => {
             </label>
             <input type="file" accept=".docx" ref={fileInputRef} onChange={handleFileChange} />
 
+            {loading && <p style={{ color: "blue" }}>Processing file... Please wait.</p>} {/* Loading indicator */}
+
             {error && <p style={{ color: "red" }}>{error}</p>}
 
-            {htmlContent && (
+            {htmlContent && !loading && (
                 <>
                     <button 
                         style={{ margin: "10px 0", padding: "5px 10px", cursor: "pointer" }}

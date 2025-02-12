@@ -6,96 +6,93 @@ const fs = require("fs");
 const path = require("path");
 const { v4: uuidv4 } = require("uuid"); // Unique ID generator
 
+const bodyParser = require("body-parser");
+const puppeteer = require("puppeteer");
+
 const app = express();
 const upload = multer({ dest: "uploads/" });
 
 app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads"))); // Serve static files
+app.use("/uploads/output_images", express.static(path.join(__dirname, "uploads/output_images")));
+app.use(bodyParser.json({ limit: "50mb" }));
+
+
 
 /**
- * Convert all .wmf and .emf images in media_folder to .png using Inkscape.
+ * Convert .wmf and .emf images to .png recursively before sending HTML response.
  */
- function convertVectorImagesToPng(mediaFolder) {
+async function convertVectorImagesToPng(mediaFolder, outputHtmlFilePath) {
     console.log(`🔍 Scanning for WMF/EMF images in: ${mediaFolder}`);
 
-    // Check if mediaFolder exists
     if (!fs.existsSync(mediaFolder)) {
         console.error(`❌ Error: Folder "${mediaFolder}" does not exist.`);
         return;
     }
 
-    // 🔄 Recursive function to scan subdirectories
-    function scanDirectory(directory) {
-        fs.readdir(directory, { withFileTypes: true }, (err, files) => {
-            if (err) {
-                console.error("❌ Error reading media folder:", err);
-                return;
-            }
+    let conversionPromises = [];
 
-            let foundImages = false;
+    async function scanDirectory(directory) {
+        const files = fs.readdirSync(directory, { withFileTypes: true });
 
-            files.forEach((file) => {
-                const filePath = path.join(directory, file.name);
+        for (const file of files) {
+            const filePath = path.join(directory, file.name);
 
-                if (file.isDirectory()) {
-                    // 📂 If it's a folder, scan recursively
-                    scanDirectory(filePath);
-                } else if (file.name.endsWith(".wmf") || file.name.endsWith(".emf")) {
-                    foundImages = true;
+            if (file.isDirectory()) {
+                await scanDirectory(filePath);
+            } else if (file.name.endsWith(".wmf") || file.name.endsWith(".emf")) {
+                const outputPath = filePath.replace(/\.(wmf|emf)$/, ".png");
 
-                    const outputPath = filePath.replace(/\.(wmf|emf)$/, ".png");
+                console.log(`🟢 Found vector image: ${filePath}, converting to ${outputPath}`);
 
-                    console.log(`🟢 Found vector image: ${filePath}, converting to ${outputPath}`);
-
+                const conversionPromise = new Promise((resolve, reject) => {
                     exec(`inkscape "${filePath}" --export-filename="${outputPath}" --export-type=png`, (error, stdout, stderr) => {
                         if (error) {
                             console.error(`❌ Error converting ${file.name}:`, stderr);
+                            reject(error);
                         } else {
                             console.log(`✅ Converted ${file.name} to ${outputPath}`);
                             console.log(`📜 Inkscape output: ${stdout}`);
 
                             // Replace image references in HTML
-                            replaceImageReferences(mediaFolder, file.name, path.basename(outputPath));
+                            replaceImageReferences(outputHtmlFilePath, file.name, path.basename(outputPath));
 
-                            // Optionally delete the original .wmf/.emf file
+                            // Optionally delete the original file
                             fs.unlink(filePath, () => console.log(`🗑️ Deleted ${file.name}`));
+                            resolve();
                         }
                     });
-                }
-            });
+                });
 
-            if (!foundImages) {
-                console.log(`⚠️ No .wmf or .emf images found in ${directory}`);
+                conversionPromises.push(conversionPromise);
             }
-        });
+        }
     }
 
-    // Start scanning from mediaFolder
-    scanDirectory(mediaFolder);
+    await scanDirectory(mediaFolder);
+    await Promise.all(conversionPromises);
+    console.log("✅ All WMF/EMF images converted successfully!");
 }
 
 /**
  * Replace .wmf and .emf references in the generated HTML file.
  */
-function replaceImageReferences(mediaFolder, oldName, newName) {
-    const htmlFilePath = fs.readdirSync(path.dirname(mediaFolder)).find(file => file.endsWith(".html"));
-    
-    if (!htmlFilePath) {
+function replaceImageReferences(htmlFilePath, oldName, newName) {
+    if (!fs.existsSync(htmlFilePath)) {
         console.log("⚠️ No HTML file found to update image references.");
         return;
     }
 
-    const fullHtmlPath = path.join(path.dirname(mediaFolder), htmlFilePath);
-    fs.readFile(fullHtmlPath, "utf8", (err, content) => {
+    fs.readFile(htmlFilePath, "utf8", (err, content) => {
         if (err) {
             console.error("❌ Error reading HTML file:", err);
             return;
         }
 
-        const updatedContent = content.replace(new RegExp(`src="media/${oldName}"`, "g"), `src="media/${newName}"`);
+        const updatedContent = content.replace(new RegExp(`src="([^"]*?)${oldName}"`, "g"), `src="$1${newName}"`);
 
-        fs.writeFile(fullHtmlPath, updatedContent, "utf8", (err) => {
+        fs.writeFile(htmlFilePath, updatedContent, "utf8", (err) => {
             if (err) {
                 console.error("❌ Error updating image references:", err);
             } else {
@@ -105,10 +102,13 @@ function replaceImageReferences(mediaFolder, oldName, newName) {
     });
 }
 
+module.exports = { convertVectorImagesToPng };
+
+
 /**
  * Handle DOCX upload and conversion.
  */
-app.post("/upload", upload.single("file"), (req, res) => {
+ app.post("/upload", upload.single("file"), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
     }
@@ -117,21 +117,31 @@ app.post("/upload", upload.single("file"), (req, res) => {
     const inputFilePath = req.file.path;
     const outputFilePath = `${inputFilePath}.html`;
 
-    // Ensure the unique image folder exists
-    fs.mkdirSync(uniqueFolder, { recursive: true });
+    try {
+        // Ensure the unique image folder exists
+        fs.mkdirSync(uniqueFolder, { recursive: true });
 
-    // Run Pandoc with a unique media folder
-    exec(`pandoc -f docx -t html --extract-media="${uniqueFolder}" -o "${outputFilePath}" "${inputFilePath}"`, (error) => {
-        if (error) {
-            console.error("Error running Pandoc:", error);
-            return res.status(500).json({ error: "Error converting file" });
-        }
+        // Run Pandoc with a unique media folder
+        await new Promise((resolve, reject) => {
+            exec(
+                `pandoc -f docx -t html --extract-media="${uniqueFolder}" -o "${outputFilePath}" "${inputFilePath}"`,
+                (error) => {
+                    if (error) {
+                        console.error("Error running Pandoc:", error);
+                        reject(error);
+                    } else {
+                        resolve();
+                    }
+                }
+            );
+        });
 
-        // ✅ Convert WMF/EMF to PNG
-        convertVectorImagesToPng(uniqueFolder);
+        // ✅ Convert WMF/EMF images to PNG before sending HTML
+        await convertVectorImagesToPng(uniqueFolder, outputFilePath);
 
+        console.log("✅ Conversion completed. Processing HTML...");
         console.log("outputFilePath:", outputFilePath);
-setTimeout(() => {
+
         fs.readFile(outputFilePath, "utf8", (err, htmlContent) => {
             if (err) {
                 return res.status(500).json({ error: "Error reading HTML file" });
@@ -151,11 +161,40 @@ setTimeout(() => {
                 fs.unlink(outputFilePath, () => {});
             }, 3000); // Wait 3s before deleting
         });
-    }, 6000); 
-    });
+    } catch (error) {
+        res.status(500).json({ error: "Conversion failed", details: error.message });
+    }
 });
+
+// Convert HTML to PDF using Puppeteer
+app.post("/generate-pdf", async (req, res) => {
+    const { html } = req.body;
+    if (!html) return res.status(400).send("No HTML content provided.");
+
+    try {
+        const browser = await puppeteer.launch();
+        const page = await browser.newPage();
+        
+        // Set the page content
+        await page.setContent(html, { waitUntil: "networkidle0" });
+
+        // Generate PDF
+        const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
+
+        await browser.close();
+
+        // Send PDF as response
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", 'attachment; filename="document.pdf"');
+        res.send(pdfBuffer);
+    } catch (error) {
+        console.error("Error generating PDF:", error);
+        res.status(500).send("Error generating PDF");
+    }
+});
+
 
 // ✅ Start the Express Server
 app.listen(5000, () => {
-    console.log("🚀 Server running on http://localhost:5000");
+    console.log("Server running on http://localhost:5000");
 });
