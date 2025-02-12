@@ -17,7 +17,8 @@ app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads"))); // Serve static files
 app.use("/uploads/output_images", express.static(path.join(__dirname, "uploads/output_images")));
 app.use(bodyParser.json({ limit: "50mb" }));
-
+// Serve PDFs as static files
+app.use("/uploads/pdfs", express.static(path.join(__dirname, "uploads/pdfs")));
 
 
 /**
@@ -166,30 +167,71 @@ module.exports = { convertVectorImagesToPng };
     }
 });
 
-// Convert HTML to PDF using Puppeteer
 app.post("/generate-pdf", async (req, res) => {
-    const { html } = req.body;
-    if (!html) return res.status(400).send("No HTML content provided.");
+    const { htmlContent } = req.body;
+
+    if (!htmlContent) {
+        console.log("❌ No HTML content received");
+        return res.status(400).json({ error: "HTML content is required" });
+    }
+
+    console.log("🔍 Received HTML content for PDF generation");
 
     try {
-        const browser = await puppeteer.launch();
+        const browser = await puppeteer.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] });
         const page = await browser.newPage();
-        
-        // Set the page content
-        await page.setContent(html, { waitUntil: "networkidle0" });
+        await page.setContent(htmlContent, { waitUntil: "domcontentloaded" });
 
-        // Generate PDF
-        const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
+        console.log("✅ Puppeteer loaded the content");
+
+        // Ensure the directory exists
+        const pdfDir = path.join(__dirname, "uploads/pdfs");
+        if (!fs.existsSync(pdfDir)) {
+            fs.mkdirSync(pdfDir, { recursive: true });
+        }
+
+        // Generate a unique filename
+        const pdfFilename = `generated_${Date.now()}.pdf`;
+        const pdfFilePath = path.join(pdfDir, pdfFilename);
+
+        // Save PDF
+        await page.pdf({ path: pdfFilePath, format: "A4", printBackground: true, margin: { top: "20px", right: "20px", bottom: "20px", left: "20px" }, scale: 1});
 
         await browser.close();
+        console.log(`📄 PDF saved successfully: ${pdfFilePath}`);
 
-        // Send PDF as response
-        res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", 'attachment; filename="document.pdf"');
+        // Return a download link
+        const baseUrl = "http://localhost:5000"; // Change this to your server URL
+        const downloadLink = `${baseUrl}/uploads/pdfs/${pdfFilename}`;
+
+        res.json({ success: true, downloadLink });
+    } catch (error) {
+        console.error("❌ PDF generation failed:", error);
+        res.status(500).json({ error: "Failed to generate PDF" });
+    }
+});
+
+app.get("/test-pdf", async (req, res) => {
+    try {
+        const browser = await puppeteer.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+        const page = await browser.newPage();
+        await page.setContent("<h1>Test PDF</h1>", { waitUntil: "domcontentloaded" });
+
+        const pdfBuffer = await page.pdf({ format: "A4", printBackground: true, margin: { top: "40px", right: "40px", bottom: "40px", left: "40px" }, scale: 1 });
+
+        await browser.close();
+        console.log("✅ Test PDF generated successfully");
+
+        res.set({
+            "Content-Type": "application/pdf",
+            "Content-Disposition": "attachment; filename=test.pdf",
+            "Content-Length": pdfBuffer.length,
+        });
+
         res.send(pdfBuffer);
     } catch (error) {
-        console.error("Error generating PDF:", error);
-        res.status(500).send("Error generating PDF");
+        console.error("❌ Test PDF generation failed:", error);
+        res.status(500).json({ error: "Failed to generate test PDF" });
     }
 });
 
