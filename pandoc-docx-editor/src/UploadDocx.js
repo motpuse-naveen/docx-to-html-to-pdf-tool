@@ -83,7 +83,10 @@ const UploadDocx = () => {
                 <>
                     <button 
                         style={{ margin: "10px 5px", padding: "5px 10px", cursor: "pointer" }}
-                        onClick={() => setHtmlContent("")}
+                        onClick={() => {
+                            //setHtmlContent(""); // Clear HTML content
+                            setDownloadLink(""); // Clear the download link
+                        }}
                     >
                         Clear
                     </button>
@@ -99,7 +102,7 @@ const UploadDocx = () => {
                             ✅ PDF Generated! <a href={downloadLink} target="_blank" rel="noopener noreferrer">Download PDF</a>
                         </p>
                     )}
-
+                    {/*
                     <Editor
                         apiKey="1lizk0khiw3hddok9wnmvlvfj0fik0vld59y3sn4sa4woygk"
                         onInit={(evt, editor) => (editorRef.current = editor)}
@@ -113,7 +116,31 @@ const UploadDocx = () => {
                             automatic_uploads: true,
                         }}
                     />
-                    
+                    */}
+                    <Editor
+                        apiKey="1lizk0khiw3hddok9wnmvlvfj0fik0vld59y3sn4sa4woygk"
+                        onInit={(evt, editor) => (editorRef.current = editor)}
+                        initialValue={htmlContent}
+                        init={{
+                            height: 500,
+                            menubar: true,
+                            plugins: "lists link image code table advlist autolink fullscreen textcolor",
+                            toolbar:
+                                "undo redo | h1 h2 h3 h4 h5 h6 | " +
+                                "alignleft aligncenter alignright alignjustify | bold italic underline |" +
+                                "bullist numlist outdent indent | fontfamily fontsize | " ,
+                            
+                            fontsize_formats: "8pt 10pt 12pt 14pt 18pt 24pt 36pt",
+                            font_formats:
+                                "Arial=arial,helvetica,sans-serif; " +
+                                "Times New Roman=times new roman,times,serif; " +
+                                "Verdana=verdana,geneva,sans-serif; " +
+                                "Courier New=courier new,courier,monospace;",
+                            content_style: "body { font-family:Arial, sans-serif; font-size:14px }",
+                            images_upload_url: "http://localhost:5000/upload-image",
+                            automatic_uploads: true,
+                        }}
+                    />
                 </>
             )}
         </div>

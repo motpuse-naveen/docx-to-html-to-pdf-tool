@@ -6,8 +6,7 @@ run --> python3 -m uvicorn main:app --reload
 
 
 Start Node Server
-------------------
-cd pandoc-docx-editor/server
+----------------
 node server.js
 
 Start Frontend
@@ -17,4 +16,5 @@ npm start
 
 Tools That have been in use:
 1] pandoc - converts docx to html.
-2] inkscape - convert wmf, emf images to png
+2] inkscape - convert wmf, emf images to png.
+3] Puppeteer - Convert HTML to PDF.
