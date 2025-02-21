@@ -10,6 +10,7 @@ const UploadDocx = () => {
     const fileInputRef = useRef(null);
 
     const [downloadLink, setDownloadLink] = useState("");
+    const [conversionOption, setConversionOption] = useState("pandoc"); // Default to Pandoc
 
     const handleFileChange = async (event) => {
         const file = event.target.files[0];
@@ -20,6 +21,7 @@ const UploadDocx = () => {
 
         const formData = new FormData();
         formData.append("file", file);
+        formData.append("conversionOption", conversionOption); // Send the selected conversion option
 
         try {
             const response = await axios.post("http://localhost:5000/upload", formData, {
@@ -74,7 +76,26 @@ const UploadDocx = () => {
                 <strong>Select DOCX File:</strong>
             </label>
             <input type="file" accept=".docx" ref={fileInputRef} onChange={handleFileChange} />
-
+            <div style={{ marginTop: "10px" }}>
+                <label>
+                    <input
+                        type="radio"
+                        value="pandoc"
+                        checked={conversionOption === "pandoc"}
+                        onChange={() => setConversionOption("pandoc")}
+                    />
+                    Pandoc
+                </label>
+                <label>
+                    <input
+                        type="radio"
+                        value="libreoffice"
+                        checked={conversionOption === "libreoffice"}
+                        onChange={() => setConversionOption("libreoffice")}
+                    />
+                    LibreOffice
+                </label>
+            </div>
             {loading && <p style={{ color: "blue" }}>Processing file... Please wait.</p>}
 
             {error && <p style={{ color: "red" }}>{error}</p>}

@@ -2,3 +2,4 @@
 /pandoc-docx-editor/server/uploads
 /pandoc-docx-editor/public/tinymce
 .DS_Store
+/pandoc-docx-editor/server/sofficefiles
